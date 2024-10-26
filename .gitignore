@@ -1,0 +1,64 @@
+# Operating System Files
+.DS_Store
+
+# Dependency Directories
+node_modules/
+ml_env/
+
+# Build Artifacts
+dist/
+build/
+
+# Logs
+logs/
+*.log
+git 
+# Temporary Files
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.old
+*.orig
+*.rej
+*.sublime-workspace
+*.sublime-project
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg
+*.egg-info/
+*.eggs/
+*.whl
+*.manifest
+*.spec
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE Files
+.vscode/
+.idea/
+
+# Configuration Files
+*.env
+*.ini
+*.cfg
+*.yaml
+*.yml
+
+# Model and Data Files
+model_cache/
+models/
+data/
+training_data/
+processed_code/
+repository/
+plots/
+metrics/
+wandb/
