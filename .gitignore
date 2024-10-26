@@ -4,6 +4,7 @@
 # Dependency Directories
 node_modules/
 ml_env/
+venv
 
 # Build Artifacts
 dist/
