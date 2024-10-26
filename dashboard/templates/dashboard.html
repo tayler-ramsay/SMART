@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LLM Training Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .terminal {
+        background: #1a1a1a;
+        color: #33ff33;
+        font-family: "Consolas", "Monaco", monospace;
+        height: 400px;
+        overflow-y: auto;
+        padding: 1rem;
+        border-radius: 8px;
+      }
+      .log-info {
+        color: #33ff33;
+      }
+      .log-debug {
+        color: #6495ed;
+      }
+      .log-warning {
+        color: #ffd700;
+      }
+      .log-error {
+        color: #ff4500;
+      }
+
+      .log-entry {
+        padding: 4px 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        font-size: 0.9em;
+        line-height: 1.4;
+      }
+
+      .log-entry:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .timestamp {
+        color: #888;
+        margin-right: 8px;
+      }
+
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-900 text-white">
+    <div class="p-6 max-w-7xl mx-auto">
+      <div class="flex justify-between items-center mb-6">
+        <div>
+          <h1 class="text-2xl font-bold">LLM Training Dashboard</h1>
+          <p class="text-gray-400">Real-time training monitoring</p>
+        </div>
+        <div class="flex gap-4">
+          <button
+            id="exportBtn"
+            class="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
+          >
+            Export Logs
+          </button>
+          <button
+            id="stopBtn"
+            class="px-4 py-2 bg-red-600 rounded hover:bg-red-700"
+          >
+            Stop Training
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12 gap-6">
+        <!-- Status Overview -->
+        <div class="col-span-12 lg:col-span-4">
+          <div class="bg-gray-800 p-6 rounded-lg mb-6">
+            <h2 class="text-xl font-semibold mb-4">Training Status</h2>
+            <div class="space-y-4">
+              <div>
+                <div class="text-sm text-gray-400">Files Processed</div>
+                <div class="text-2xl font-bold">105</div>
+              </div>
+              <div>
+                <div class="text-sm text-gray-400">Model</div>
+                <div class="text-lg">CodeLlama-7b-Python</div>
+              </div>
+              <div>
+                <div class="text-sm text-gray-400">Dataset Status</div>
+                <div class="text-lg">Train/Validation Split</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Log Filters -->
+        <div class="col-span-12">
+          <div class="bg-gray-800 p-4 rounded-lg mb-4 flex gap-4">
+            <input
+              type="text"
+              id="logSearch"
+              placeholder="Search logs..."
+              class="bg-gray-700 text-white px-4 py-2 rounded flex-grow"
+            />
+            <select
+              id="logLevel"
+              class="bg-gray-700 text-white px-4 py-2 rounded"
+            >
+              <option value="all">All Levels</option>
+              <option value="info">Info</option>
+              <option value="debug">Debug</option>
+              <option value="warning">Warning</option>
+              <option value="error">Error</option>
+            </select>
+            <button
+              id="clearLogs"
+              class="px-4 py-2 bg-red-600 rounded hover:bg-red-700"
+            >
+              Clear Logs
+            </button>
+          </div>
+        </div>
+
+        <!-- Log Display -->
+        <div class="col-span-12">
+          <div class="terminal" id="logDisplay"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const socket = io("http://localhost:5002");
+      const logDisplay = document.getElementById("logDisplay");
+      const logSearch = document.getElementById("logSearch");
+      const logLevel = document.getElementById("logLevel");
+
+      // Parse log level from message
+      function getLogLevel(message) {
+        if (message.includes("ERROR")) return "error";
+        if (message.includes("WARNING")) return "warning";
+        if (message.includes("DEBUG")) return "debug";
+        return "info";
+      }
+
+      // Format timestamp
+      function formatTimestamp(timestamp) {
+        return new Date(timestamp).toLocaleTimeString();
+      }
+
+      // Add log entry
+      function addLogEntry(message, timestamp) {
+        const level = getLogLevel(message);
+        const entry = document.createElement("div");
+        entry.className = `log-entry log-${level}`;
+        entry.innerHTML = `
+                <span class="timestamp">[${formatTimestamp(timestamp)}]</span>
+                <span class="message">${message}</span>
+            `;
+        logDisplay.appendChild(entry);
+        logDisplay.scrollTop = logDisplay.scrollHeight;
+      }
+
+      // Socket events
+      socket.on("connect", () => {
+        addLogEntry("Connected to training server", new Date());
+      });
+
+      socket.on("log_message", (data) => {
+        addLogEntry(data.message, data.timestamp);
+      });
+
+      // Filter logs
+      logSearch.addEventListener("input", (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const entries = logDisplay.getElementsByClassName("log-entry");
+        Array.from(entries).forEach((entry) => {
+          const message = entry
+            .querySelector(".message")
+            .textContent.toLowerCase();
+          entry.style.display = message.includes(searchTerm) ? "block" : "none";
+        });
+      });
+
+      logLevel.addEventListener("change", (e) => {
+        const level = e.target.value;
+        const entries = logDisplay.getElementsByClassName("log-entry");
+        Array.from(entries).forEach((entry) => {
+          if (level === "all") {
+            entry.style.display = "block";
+          } else {
+            entry.style.display = entry.classList.contains(`log-${level}`)
+              ? "block"
+              : "none";
+          }
+        });
+      });
+
+      // Clear logs
+      document.getElementById("clearLogs").addEventListener("click", () => {
+        logDisplay.innerHTML = "";
+      });
+
+      // Export logs
+      document.getElementById("exportBtn").addEventListener("click", () => {
+        const logs = Array.from(logDisplay.getElementsByClassName("log-entry"))
+          .map((entry) => {
+            const timestamp = entry.querySelector(".timestamp").textContent;
+            const message = entry.querySelector(".message").textContent;
+            return `${timestamp} ${message}`;
+          })
+          .join("\n");
+
+        const blob = new Blob([logs], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "training_logs.txt";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+
+      // Initial request for logs
+      socket.emit("request_logs");
+    </script>
+  </body>
+</html>
