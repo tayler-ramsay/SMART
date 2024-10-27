@@ -37,6 +37,9 @@ class ModelTrainer:
 
     # Initialize the tokenizer
     tokenizer = AutoTokenizer.from_pretrained("codellama/CodeLlama-7b-Python-hf")
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
     def log_model_info(self):
         # Log basic model information for debugging and verification
         self.logger.info(f"Model type: {self.model_type}")
@@ -48,13 +51,19 @@ class ModelTrainer:
             # Load dataset from disk
             dataset = load_from_disk("processed_code")  # Adjust this path if needed
 
+            # Tokenize the dataset
+            def tokenize_function(examples):
+                return self.tokenizer(examples['text'], truncation=True, padding=True, return_tensors="pt")
+
+            tokenized_datasets = dataset.map(tokenize_function, batched=True)
+
             # Check if splits already exist
-            if isinstance(dataset, DatasetDict) and 'train' in dataset and 'validation' in dataset:
+            if isinstance(tokenized_datasets, DatasetDict) and 'train' in tokenized_datasets and 'validation' in tokenized_datasets:
                 self.logger.info("Dataset with splits loaded successfully.")
-                return dataset
+                return tokenized_datasets
             else:
                 # Perform an 80/20 train-validation split if no splits are found
-                split_dataset = dataset.train_test_split(test_size=0.2)
+                split_dataset = tokenized_datasets.train_test_split(test_size=0.2)
                 self.logger.info("Dataset split into training and validation sets.")
                 return DatasetDict({
                     'train': split_dataset['train'],
@@ -86,6 +95,22 @@ class ModelTrainer:
     def _setup_logging(self):
         logger = logging.getLogger(__name__)
         logger.setLevel(logging.INFO)
+        
+        # Create logs directory with date subdirectory
+        date_str = datetime.now().strftime('%Y%m%d')
+        log_dir = Path("logs") / date_str
+        log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Define log file name with timestamp
+        log_file_name = log_dir / f"training_{datetime.now().strftime('%H%M%S')}.log"
+        
+        # File handler
+        file_handler = logging.FileHandler(log_file_name)
+        file_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        
         return logger
     
     def setup_model(self):

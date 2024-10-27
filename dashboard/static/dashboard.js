@@ -1,229 +1,209 @@
-// static/js/dashboard.js
+import React, { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { AlertCircle, CheckCircle, Play, Pause, Square, Save } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from 'components/ui/card';
+import { Alert, AlertDescription } from 'components/ui/alert';
+import io from 'socket.io-client';
 
-// Initialize Socket.IO connection
 const socket = io('http://localhost:5002');
 
-// React Import
-import React, { useState, useEffect } from 'react';
-import { createRoot } from 'react-dom/client';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { 
-  AlertCircle, TrendingUp, Brain, Zap, 
-  Play, Pause, Download, Share,
-  Settings, Bell, AlertTriangle,
-  Github, MessageSquare, Layers
-} from 'lucide-react';
-
-const Dashboard = () => {
+const LLMTrainingDashboard = () => {
   const [metrics, setMetrics] = useState({
     loss: [],
     accuracy: [],
-    validation_loss: [],
-    perplexity: [],
-    gradient_norm: [],
-    learning_rate: [],
-    epoch: 0,
-    progress: 0,
-    tokens_processed: 0,
-    processing_speed: 0,
-    gpu_utilization: 85,
-    cpu_utilization: 45,
-    memory_usage: 12.4,
-    estimated_time: 3600,
-    cost_per_hour: 2.5,
-    stability_score: 0.85
+    attentionEntropy: [],
+    layerGradients: {},
+    domainAccuracy: {},
+    contextRetention: [],
+    knowledgeConsistency: [],
+    convergenceRate: 0,
+    resourceUtilization: {
+      gpu: 0,
+      cpu: 0,
+      memory: 0
+    },
+    alerts: []
   });
 
-  const [trainingStatus, setTrainingStatus] = useState({
-    isActive: true,
-    lastCheckpoint: '2024-10-26 15:30:00',
-    checkpointMetrics: { loss: 0.234, accuracy: 0.891 }
-  });
+  const [trainingState, setTrainingState] = useState('running');
+  const [selectedMetric, setSelectedMetric] = useState('loss');
 
-  const [selectedTab, setSelectedTab] = useState('overview');
-
-  // Socket.IO event handlers
   useEffect(() => {
-    socket.on('connect', () => {
-      console.log('Connected to server');
-    });
-
-    socket.on('update_metrics', (newMetrics) => {
-      setMetrics(prevMetrics => ({
-        ...prevMetrics,
-        ...newMetrics
-      }));
-    });
-
-    // Request initial data
+    console.log("Requesting data from server");
+    // Request data from the server
     socket.emit('request_data');
 
-    // Set up periodic data requests
-    const interval = setInterval(() => {
-      socket.emit('request_data');
-    }, 2000);
+    // Listen for updates from the server
+    socket.on('update_metrics', (data) => {
+      console.log("Received metrics update", data);
+      setMetrics(data);
+    });
 
     return () => {
-      clearInterval(interval);
+      console.log("Disconnecting from server");
       socket.off('update_metrics');
     };
   }, []);
 
-  // Training control handlers
   const handleTrainingControl = (action) => {
-    socket.emit('training_control', { action });
+    console.log(`Sending training control action: ${action}`);
+    setTrainingState(action === 'resume' ? 'running' : action);
+    socket.emit('control_training', action);
   };
 
-  // Render components...
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="p-6 max-w-7xl mx-auto bg-gray-900 text-white">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">LLM Training Dashboard</h1>
-          <div className="flex items-center mt-2 text-gray-500">
-            <Github className="h-4 w-4 mr-2" />
-            <a href="https://github.com/yourusername/llm-training-dashboard" 
-               className="hover:text-blue-500 transition-colors">
-              View on GitHub
-            </a>
-          </div>
+          <h1 className="text-2xl font-bold">LLM Training Dashboard</h1>
+          <p className="text-gray-400">Real-time training monitoring and analysis</p>
         </div>
-        <div className="flex gap-4">
-          <Button 
-            variant="outline"
-            onClick={() => handleTrainingControl(trainingStatus.isActive ? 'pause' : 'resume')}
+        <div className="flex gap-2">
+          <button 
+            onClick={() => handleTrainingControl(trainingState === 'running' ? 'pause' : 'resume')}
+            className="flex items-center gap-2 px-4 py-2 rounded bg-blue-600 hover:bg-blue-700"
           >
-            {trainingStatus.isActive ? 
-              <Pause className="mr-2 h-4 w-4" /> : 
-              <Play className="mr-2 h-4 w-4" />
-            }
-            {trainingStatus.isActive ? 'Pause Training' : 'Resume Training'}
-          </Button>
-          <Button 
-            variant="outline"
+            {trainingState === 'running' ? <Pause size={16} /> : <Play size={16} />}
+            {trainingState === 'running' ? 'Pause' : 'Resume'}
+          </button>
+          <button 
+            onClick={() => handleTrainingControl('stop')}
+            className="flex items-center gap-2 px-4 py-2 rounded bg-red-600 hover:bg-red-700"
+          >
+            <Square size={16} />
+            Stop
+          </button>
+          <button 
             onClick={() => handleTrainingControl('checkpoint')}
+            className="flex items-center gap-2 px-4 py-2 rounded bg-green-600 hover:bg-green-700"
           >
-            <Download className="mr-2 h-4 w-4" />
-            Save Checkpoint
-          </Button>
+            <Save size={16} />
+            Checkpoint
+          </button>
         </div>
       </div>
 
-      {/* Main Progress Card */}
-      <Card>
+      {/* Main Metrics Chart */}
+      <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Training Progress</CardTitle>
-          <CardDescription>Overall completion and key metrics</CardDescription>
+          <CardTitle>Training Metrics</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Progress value={metrics.progress} className="h-2" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="text-gray-500">Epoch:</span>
-              <span className="ml-2 font-medium">{metrics.epoch} of 10</span>
-            </div>
-            <div>
-              <span className="text-gray-500">Tokens:</span>
-              <span className="ml-2 font-medium">
-                {(metrics.tokens_processed / 1e6).toFixed(1)}M
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500">Speed:</span>
-              <span className="ml-2 font-medium">
-                {(metrics.processing_speed / 1000).toFixed(1)}K tokens/s
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500">GPU:</span>
-              <span className="ml-2 font-medium">{metrics.gpu_utilization}%</span>
-            </div>
+        <CardContent>
+          <div className="h-64">
+            <LineChart width={900} height={250} data={metrics[selectedMetric].map((value, index) => ({
+              name: index,
+              value
+            }))}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="value" stroke="#8884d8" />
+            </LineChart>
           </div>
         </CardContent>
       </Card>
 
-      {/* Training Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Resource Utilization */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
         <Card>
           <CardHeader>
-            <CardTitle>Training Loss</CardTitle>
+            <CardTitle>GPU Utilization</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={metrics.loss.map((loss, i) => ({
-                  epoch: i + 1,
-                  training: loss,
-                  validation: metrics.validation_loss[i]
-                }))}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="epoch" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line 
-                    type="monotone" 
-                    dataKey="training" 
-                    name="Training Loss" 
-                    stroke="#ef4444" 
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="validation" 
-                    name="Validation Loss" 
-                    stroke="#3b82f6" 
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="text-2xl font-bold">
+              {metrics.resourceUtilization.gpu.toFixed(1)}%
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2.5">
+              <div 
+                className="bg-blue-600 h-2.5 rounded-full" 
+                style={{width: `${metrics.resourceUtilization.gpu}%`}}
+              ></div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>CPU Utilization</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {metrics.resourceUtilization.cpu.toFixed(1)}%
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2.5">
+              <div 
+                className="bg-green-600 h-2.5 rounded-full" 
+                style={{width: `${metrics.resourceUtilization.cpu}%`}}
+              ></div>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Metrics</CardTitle>
+            <CardTitle>Memory Usage</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={metrics.perplexity.map((ppl, i) => ({
-                  epoch: i + 1,
-                  perplexity: ppl,
-                  accuracy: metrics.accuracy[i]
-                }))}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="epoch" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line 
-                    type="monotone" 
-                    dataKey="perplexity" 
-                    name="Perplexity" 
-                    stroke="#22c55e" 
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="accuracy" 
-                    name="Accuracy" 
-                    stroke="#eab308" 
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="text-2xl font-bold">
+              {metrics.resourceUtilization.memory.toFixed(1)}%
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2.5">
+              <div 
+                className="bg-yellow-600 h-2.5 rounded-full" 
+                style={{width: `${metrics.resourceUtilization.memory}%`}}
+              ></div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Layer Gradients */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Layer-specific Gradients</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-6 gap-4">
+            {Object.entries(metrics.layerGradients).map(([layer, value]) => (
+              <div key={layer} className="text-center">
+                <div className="text-sm text-gray-400">{layer}</div>
+                <div className="text-lg font-bold">{value.toFixed(3)}</div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Domain Accuracy */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Domain-specific Accuracy</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-4 gap-4">
+            {Object.entries(metrics.domainAccuracy).map(([domain, accuracy]) => (
+              <div key={domain} className="text-center">
+                <div className="text-sm text-gray-400">{domain}</div>
+                <div className="text-lg font-bold">{(accuracy * 100).toFixed(1)}%</div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Alerts */}
+      {metrics.alerts.length > 0 && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {metrics.alerts[metrics.alerts.length - 1]}
+          </AlertDescription>
+        </Alert>
+      )}
     </div>
   );
 };
 
-// Mount React app
-const container = document.getElementById('root');
-const root = createRoot(container);
-root.render(<Dashboard />);
+export default LLMTrainingDashboard;

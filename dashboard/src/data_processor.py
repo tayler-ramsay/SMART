@@ -4,6 +4,7 @@ import numpy as np
 from typing import Dict, List, Optional, Union
 import json
 import logging
+from datasets import load_from_disk
 
 class DataProcessor:
     def __init__(self):
@@ -74,6 +75,7 @@ class DataProcessor:
             'gpu_threshold': 95,
             'memory_threshold': 90
         }
+        self.dataset = load_from_disk("processed_code")  # Load the processed dataset
 
     def setup_logging(self):
         """Configure logging system"""
@@ -98,13 +100,14 @@ class DataProcessor:
             return self.metrics
             
         if self.metrics['epoch'] < self.max_epochs:
-            # Update core training metrics
-            new_loss = random.uniform(0.1, 0.5)
+            # Update core training metrics from real data
+            train_dataset = self.dataset['train']
+            new_loss = np.mean([example['loss'] for example in train_dataset])
             self.metrics['loss'].append(new_loss)
-            self.metrics['accuracy'].append(random.uniform(0.8, 1.0))
-            self.metrics['validation_loss'].append(random.uniform(0.2, 0.6))
-            self.metrics['perplexity'].append(random.uniform(10, 15))
-            self.metrics['gradient_norm'].append(random.uniform(0.1, 0.4))
+            self.metrics['accuracy'].append(np.mean([example['accuracy'] for example in train_dataset]))
+            self.metrics['validation_loss'].append(np.mean([example['validation_loss'] for example in train_dataset]))
+            self.metrics['perplexity'].append(np.mean([example['perplexity'] for example in train_dataset]))
+            self.metrics['gradient_norm'].append(np.mean([example['gradient_norm'] for example in train_dataset]))
             self.metrics['learning_rate'].append(0.001)
             
             # Update progress metrics
